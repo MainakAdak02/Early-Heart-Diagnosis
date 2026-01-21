@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeartGuard - AI Risk Detection</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; text-align: center; }
+        label { display: block; margin-top: 15px; color: #34495e; font-weight: bold; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        button { width: 100%; margin-top: 25px; padding: 15px; background-color: #e74c3c; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: 0.3s; }
+        button:hover { background-color: #c0392b; }
+        
+        /* Result Box Styles */
+        #result { margin-top: 25px; padding: 20px; border-radius: 8px; display: none; text-align: center; }
+        .safe { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        
+        /* Hospital List Styles */
+        .hospital-item { background: #fff; border: 1px solid #ddd; padding: 15px; margin-top: 10px; border-radius: 6px; text-align: left; }
+        .hospital-name { font-weight: bold; color: #2c3e50; }
+        .btn-call { display: inline-block; margin-top: 5px; padding: 5px 10px; background-color: #27ae60; color: white; text-decoration: none; border-radius: 4px; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>❤️ HeartGuard AI</h1>
+    <p style="text-align: center; color: #7f8c8d;">Enter your health metrics for an instant risk analysis.</p>
+
+    <form id="healthForm">
+        <label>Age</label>
+        <input type="number" id="age" placeholder="e.g., 55" required>
+
+        <label>Sex</label>
+        <select id="sex">
+            <option value="1">Male</option>
+            <option value="0">Female</option>
+        </select>
+
+        <label>Chest Pain Type</label>
+        <select id="cp">
+            <option value="1">Typical Angina</option>
+            <option value="2">Atypical Angina</option>
+            <option value="3">Non-anginal Pain</option>
+            <option value="4">Asymptomatic</option>
+        </select>
+
+        <label>Resting Blood Pressure (mm Hg)</label>
+        <input type="number" id="trestbps" placeholder="e.g., 120" required>
+
+        <label>Cholesterol (mg/dl)</label>
+        <input type="number" id="chol" placeholder="e.g., 200" required>
+
+        <label>Fasting Blood Sugar > 120 mg/dl?</label>
+        <select id="fbs">
+            <option value="0">No</option>
+            <option value="1">Yes</option>
+        </select>
+
+        <label>Resting ECG Results</label>
+        <select id="restecg">
+            <option value="0">Normal</option>
+            <option value="1">ST-T Wave Abnormality</option>
+            <option value="2">Left Ventricular Hypertrophy</option>
+        </select>
+
+        <label>Max Heart Rate Achieved</label>
+        <input type="number" id="thalach" placeholder="e.g., 150" required>
+
+        <label>Exercise Induced Angina?</label>
+        <select id="exang">
+            <option value="0">No</option>
+            <option value="1">Yes</option>
+        </select>
+
+        <label>ST Depression (Oldpeak)</label>
+        <input type="number" step="0.1" id="oldpeak" placeholder="e.g., 1.5" required>
+
+        <label>Slope of Peak Exercise ST</label>
+        <select id="slope">
+            <option value="1">Upsloping</option>
+            <option value="2">Flat</option>
+            <option value="3">Downsloping</option>
+        </select>
+
+        <label>Number of Major Vessels (0-3)</label>
+        <input type="number" id="ca" min="0" max="3" placeholder="0" required>
+
+        <label>Thalassemia</label>
+        <select id="thal">
+            <option value="3">Normal</option>
+            <option value="6">Fixed Defect</option>
+            <option value="7">Reversable Defect</option>
+        </select>
+
+        <button type="submit" id="submitBtn">Analyze Risk</button>
+    </form>
+
+    <div id="result">
+        <h2 id="resultText"></h2>
+        <div id="hospitalList"></div>
+    </div>
+</div>
+
+<script>
+    // 1. Get User Location on Load
+    let userLat = 0;
+    let userLon = 0;
+
+    window.onload = function() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                userLat = position.coords.latitude;
+                userLon = position.coords.longitude;
+                console.log("Location detected:", userLat, userLon);
+            }, function() {
+                alert("Please allow location access to find nearest hospitals.");
+            });
+        }
+    };
+
+    // 2. Handle Form Submission
+    document.getElementById('healthForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const btn = document.getElementById('submitBtn');
+        btn.innerText = "Analyzing...";
+        
+        // Collect data from inputs
+        const features = [
+            parseFloat(document.getElementById('age').value),
+            parseFloat(document.getElementById('sex').value),
+            parseFloat(document.getElementById('cp').value),
+            parseFloat(document.getElementById('trestbps').value),
+            parseFloat(document.getElementById('chol').value),
+            parseFloat(document.getElementById('fbs').value),
+            parseFloat(document.getElementById('restecg').value),
+            parseFloat(document.getElementById('thalach').value),
+            parseFloat(document.getElementById('exang').value),
+            parseFloat(document.getElementById('oldpeak').value),
+            parseFloat(document.getElementById('slope').value),
+            parseFloat(document.getElementById('ca').value),
+            parseFloat(document.getElementById('thal').value)
+        ];
+
+        try {
+            // Send data to Python Backend
+            const response = await fetch('http://127.0.0.1:5000/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    features: features,
+                    lat: userLat,
+                    lon: userLon
+                })
+            });
+
+            const data = await response.json();
+            
+            // Display Result
+            const resultDiv = document.getElementById('result');
+            const resultText = document.getElementById('resultText');
+            const hospitalList = document.getElementById('hospitalList');
+            
+            resultDiv.style.display = 'block';
+            hospitalList.innerHTML = ''; // Clear previous list
+
+            if (data.risk === 1) {
+                // High Risk
+                resultDiv.className = 'danger';
+                resultText.innerText = "⚠️ High Risk Detected - Seek Medical Attention";
+                
+                // Show Hospitals
+                if (data.nearby_hospitals.length > 0) {
+                    const listHeader = document.createElement('h3');
+                    listHeader.innerText = "Nearest Hospitals:";
+                    hospitalList.appendChild(listHeader);
+
+                    data.nearby_hospitals.forEach(hosp => {
+                        const div = document.createElement('div');
+                        div.className = 'hospital-item';
+                        div.innerHTML = `
+                            <div class="hospital-name">${hosp.name}</div>
+                            <div>Distance: ${hosp.distance_km} km</div>
+                            <a href="tel:${hosp.phone}" class="btn-call">📞 Call Now: ${hosp.phone}</a>
+                        `;
+                        hospitalList.appendChild(div);
+                    });
+                } else {
+                    hospitalList.innerHTML = "<p>No specific hospitals found in database nearby.</p>";
+                }
+            } else {
+                // Low Risk
+                resultDiv.className = 'safe';
+                resultText.innerText = "✅ Low Risk - Keep Maintaining a Healthy Lifestyle!";
+            }
+
+        } catch (error) {
+            alert("Error connecting to server. Make sure Python is running!");
+            console.error(error);
+        }
+
+        btn.innerText = "Analyze Risk";
+    });
+</script>
+
+</body>
+</html>
